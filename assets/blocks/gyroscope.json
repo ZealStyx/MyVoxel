@@ -1,0 +1,24 @@
+{
+  "id": "gyroscope",
+  "name": "Gyroscope",
+  "numericId": 5,
+  "textures": {
+    "all": "textures/blocks/gyroscope"
+  },
+  "physics": {
+    "mass": 2.0,
+    "restitution": 0.1,
+    "friction": 0.6
+  },
+  "pbr": {
+    "metallic": 0.7,
+    "roughness": 0.4,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "MECHANICAL", "REQUIRES_POWER"],
+  "model": "models/blocks/gyroscope.json",
+  "behaviourFile": "behaviours/blocks/gyroscope.json",
+  "item": {
+    "texture": "textures/items/gyroscope"
+  }
+}

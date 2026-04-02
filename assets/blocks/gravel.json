@@ -1,0 +1,22 @@
+{
+  "id": "gravel",
+  "name": "Gravel",
+  "numericId": 21,
+  "textures": {
+    "all": "textures/blocks/gravel"
+  },
+  "physics": {
+    "mass": 0.8,
+    "restitution": 0.2,
+    "friction": 0.7
+  },
+  "pbr": {
+    "metallic": 0.05,
+    "roughness": 0.95,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "NATURAL"],
+  "item": {
+    "texture": "textures/items/stone"
+  }
+}

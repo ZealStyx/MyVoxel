@@ -1,0 +1,22 @@
+package com.zeal.voxel.block;
+
+public enum BlockTag {
+    SOLID,
+    TRANSPARENT,
+    ALPHA_BLEND,
+    ALPHA_CUTOUT,
+    SAME_TYPE_CULL,
+    NO_DEPTH_WRITE,
+    NATURAL,
+    DIRT_LIKE,
+    MECHANICAL,
+    EMISSIVE,
+    REQUIRES_POWER,
+    SHOVEL_PREFERRED,
+    PICKAXE_PREFERRED,
+    AXE_PREFERRED,
+    FLAMMABLE,
+    LIQUID,
+    NO_COLLIDE,
+    REPLACEABLE
+}

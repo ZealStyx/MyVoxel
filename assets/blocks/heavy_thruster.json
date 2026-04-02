@@ -1,0 +1,33 @@
+{
+  "id": "heavy_thruster",
+  "name": "Heavy Thruster",
+  "numericId": 8,
+  "textures": {
+    "top": "textures/blocks/thruster_top",
+    "bottom": "textures/blocks/thruster_bottom",
+    "north": "textures/blocks/heavy_thruster",
+    "south": "textures/blocks/thruster_exhaust",
+    "east": "textures/blocks/heavy_thruster",
+    "west": "textures/blocks/heavy_thruster"
+  },
+  "physics": {
+    "mass": 2.2,
+    "restitution": 0.1,
+    "friction": 0.75
+  },
+  "pbr": {
+    "metallic": 0.9,
+    "roughness": 0.28,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "MECHANICAL", "EMISSIVE", "REQUIRES_POWER"],
+  "model": "models/blocks/heavy_thruster.json",
+  "behaviourFile": "behaviours/blocks/thruster.json",
+  "behaviourParams": {
+    "force": 95.0,
+    "particleScale": 1.35
+  },
+  "item": {
+    "texture": "textures/items/heavy_thruster"
+  }
+}

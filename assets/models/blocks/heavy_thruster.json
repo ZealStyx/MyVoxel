@@ -1,0 +1,37 @@
+{
+  "textureSize": [16, 16],
+  "textures": {
+    "top": "textures/blocks/thruster_top",
+    "bottom": "textures/blocks/thruster_bottom",
+    "side": "textures/blocks/heavy_thruster",
+    "exhaust": "textures/blocks/thruster_exhaust"
+  },
+  "elements": [
+    {
+      "name": "shell",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "up": { "uv": [0, 0, 16, 16], "texture": "#top" },
+        "down": { "uv": [0, 0, 16, 16], "texture": "#bottom" },
+        "north": { "uv": [0, 0, 16, 16], "texture": "#side" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#exhaust" },
+        "east": { "uv": [0, 0, 16, 16], "texture": "#side" },
+        "west": { "uv": [0, 0, 16, 16], "texture": "#side" }
+      }
+    },
+    {
+      "name": "nozzle",
+      "from": [4, 2, 14],
+      "to": [12, 14, 16],
+      "faces": {
+        "up": { "uv": [0, 0, 16, 16], "texture": "#side" },
+        "down": { "uv": [0, 0, 16, 16], "texture": "#side" },
+        "north": { "uv": [0, 0, 16, 16], "texture": "#side" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#exhaust" },
+        "east": { "uv": [0, 0, 16, 16], "texture": "#side" },
+        "west": { "uv": [0, 0, 16, 16], "texture": "#side" }
+      }
+    }
+  ]
+}

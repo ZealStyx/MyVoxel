@@ -1,0 +1,29 @@
+{
+  "id": "thruster",
+  "name": "Thruster",
+  "numericId": 4,
+  "textures": {
+    "top": "textures/blocks/thruster_top",
+    "bottom": "textures/blocks/thruster_bottom",
+    "north": "textures/blocks/thruster_side",
+    "south": "textures/blocks/thruster_exhaust",
+    "east": "textures/blocks/thruster_side",
+    "west": "textures/blocks/thruster_side"
+  },
+  "physics": {
+    "mass": 1.5,
+    "restitution": 0.1,
+    "friction": 0.7
+  },
+  "pbr": {
+    "metallic": 0.8,
+    "roughness": 0.35,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "MECHANICAL", "EMISSIVE", "REQUIRES_POWER"],
+  "model": "models/blocks/thruster.json",
+  "behaviourFile": "behaviours/blocks/thruster.json",
+  "item": {
+    "texture": "textures/items/thruster"
+  }
+}

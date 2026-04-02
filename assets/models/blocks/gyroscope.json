@@ -1,0 +1,21 @@
+{
+  "textureSize": [16, 16],
+  "textures": {
+    "all": "textures/blocks/gyroscope"
+  },
+  "elements": [
+    {
+      "name": "frame",
+      "from": [2, 2, 2],
+      "to": [14, 14, 14],
+      "faces": {
+        "up": { "uv": [0, 0, 16, 16], "texture": "#all" },
+        "down": { "uv": [0, 0, 16, 16], "texture": "#all" },
+        "north": { "uv": [0, 0, 16, 16], "texture": "#all" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#all" },
+        "east": { "uv": [0, 0, 16, 16], "texture": "#all" },
+        "west": { "uv": [0, 0, 16, 16], "texture": "#all" }
+      }
+    }
+  ]
+}

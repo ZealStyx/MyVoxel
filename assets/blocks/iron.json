@@ -1,0 +1,22 @@
+{
+  "id": "iron",
+  "name": "Iron",
+  "numericId": 3,
+  "textures": {
+    "all": "textures/blocks/iron"
+  },
+  "physics": {
+    "mass": 3.0,
+    "restitution": 0.05,
+    "friction": 0.6
+  },
+  "pbr": {
+    "metallic": 1.0,
+    "roughness": 0.2,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "MECHANICAL", "PICKAXE_PREFERRED"],
+  "item": {
+    "texture": "textures/items/iron"
+  }
+}

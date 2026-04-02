@@ -1,0 +1,22 @@
+{
+  "id": "dirt",
+  "name": "Dirt",
+  "numericId": 7,
+  "textures": {
+    "all": "textures/blocks/dirt"
+  },
+  "physics": {
+    "mass": 1.2,
+    "restitution": 0.05,
+    "friction": 0.95
+  },
+  "pbr": {
+    "metallic": 0.0,
+    "roughness": 1.0,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "NATURAL", "DIRT_LIKE", "SHOVEL_PREFERRED"],
+  "item": {
+    "texture": "textures/items/dirt"
+  }
+}

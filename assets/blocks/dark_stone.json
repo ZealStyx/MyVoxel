@@ -1,0 +1,22 @@
+{
+  "id": "dark_stone",
+  "name": "Dark Stone",
+  "numericId": 18,
+  "textures": {
+    "all": "textures/blocks/dark_stone"
+  },
+  "physics": {
+    "mass": 1.0,
+    "restitution": 0.1,
+    "friction": 0.9
+  },
+  "pbr": {
+    "metallic": 0.05,
+    "roughness": 0.95,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "NATURAL", "PICKAXE_PREFERRED"],
+  "item": {
+    "texture": "textures/items/dark_stone"
+  }
+}

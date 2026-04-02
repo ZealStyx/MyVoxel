@@ -1,0 +1,27 @@
+{
+  "id": "grass",
+  "name": "Grass",
+  "numericId": 6,
+  "textures": {
+    "top": "textures/blocks/grass_top",
+    "bottom": "textures/blocks/dirt",
+    "north": "textures/blocks/grass_top",
+    "south": "textures/blocks/grass_top",
+    "east": "textures/blocks/grass_top",
+    "west": "textures/blocks/grass_top"
+  },
+  "physics": {
+    "mass": 1.0,
+    "restitution": 0.05,
+    "friction": 0.95
+  },
+  "pbr": {
+    "metallic": 0.0,
+    "roughness": 1.0,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "NATURAL", "SHOVEL_PREFERRED"],
+  "item": {
+    "texture": "textures/items/grass_block"
+  }
+}

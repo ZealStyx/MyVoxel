@@ -1,0 +1,7 @@
+{
+  "type": "gyroscope",
+  "params": {
+    "stabilizationStrength": 5.0,
+    "axis": "y"
+  }
+}

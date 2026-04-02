@@ -1,0 +1,22 @@
+{
+  "id": "water",
+  "name": "Water",
+  "numericId": 16,
+  "textures": {
+    "all": "textures/blocks/water"
+  },
+  "physics": {
+    "mass": 0.0,
+    "restitution": 0.5,
+    "friction": 0.1
+  },
+  "pbr": {
+    "metallic": 0.8,
+    "roughness": 0.2,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["LIQUID", "TRANSPARENT", "ALPHA_BLEND", "SAME_TYPE_CULL", "NO_DEPTH_WRITE", "NO_COLLIDE", "REPLACEABLE"],
+  "item": {
+    "texture": "textures/items/water"
+  }
+}

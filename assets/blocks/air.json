@@ -1,0 +1,19 @@
+{
+  "id": "air",
+  "name": "Air",
+  "numericId": 0,
+  "textures": {
+    "all": "textures/blocks/air"
+  },
+  "physics": {
+    "mass": 0.0,
+    "restitution": 0.0,
+    "friction": 0.0
+  },
+  "pbr": {
+    "metallic": 0.0,
+    "roughness": 1.0,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["TRANSPARENT", "NO_COLLIDE", "REPLACEABLE"]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "snow",
+  "name": "Snow",
+  "numericId": 23,
+  "textures": {
+    "all": "textures/blocks/snow"
+  },
+  "physics": {
+    "mass": 0.3,
+    "restitution": 0.3,
+    "friction": 0.5
+  },
+  "pbr": {
+    "metallic": 0.05,
+    "roughness": 0.9,
+    "emission": [0.1, 0.1, 0.1]
+  },
+  "tags": ["SOLID", "NATURAL"],
+  "item": {
+    "texture": "textures/items/snow"
+  }
+}

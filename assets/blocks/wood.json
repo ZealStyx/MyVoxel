@@ -1,0 +1,22 @@
+{
+  "id": "wood",
+  "name": "Wood",
+  "numericId": 2,
+  "textures": {
+    "all": "textures/blocks/wood"
+  },
+  "physics": {
+    "mass": 0.6,
+    "restitution": 0.2,
+    "friction": 0.75
+  },
+  "pbr": {
+    "metallic": 0.0,
+    "roughness": 0.85,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "FLAMMABLE", "AXE_PREFERRED"],
+  "item": {
+    "texture": "textures/items/wood"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "cliff_stone",
+  "name": "Cliff Stone",
+  "numericId": 19,
+  "textures": {
+    "all": "textures/blocks/cliff_stone"
+  },
+  "physics": {
+    "mass": 1.0,
+    "restitution": 0.1,
+    "friction": 0.9
+  },
+  "pbr": {
+    "metallic": 0.05,
+    "roughness": 0.95,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "NATURAL", "PICKAXE_PREFERRED"],
+  "item": {
+    "texture": "textures/items/cliff_stone"
+  }
+}

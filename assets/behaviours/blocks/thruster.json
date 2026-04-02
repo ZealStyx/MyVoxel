@@ -1,0 +1,8 @@
+{
+  "type": "thruster",
+  "params": {
+    "force": 50.0,
+    "exhaustFace": "south",
+    "particleScale": 1.0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "sand",
+  "name": "Sand",
+  "numericId": 22,
+  "textures": {
+    "all": "textures/blocks/sand"
+  },
+  "physics": {
+    "mass": 0.7,
+    "restitution": 0.1,
+    "friction": 0.6
+  },
+  "pbr": {
+    "metallic": 0.05,
+    "roughness": 1.0,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "NATURAL"],
+  "item": {
+    "texture": "textures/items/sand"
+  }
+}

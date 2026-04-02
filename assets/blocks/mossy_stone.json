@@ -1,0 +1,22 @@
+{
+  "id": "mossy_stone",
+  "name": "Mossy Stone",
+  "numericId": 20,
+  "textures": {
+    "all": "textures/blocks/mossy_stone"
+  },
+  "physics": {
+    "mass": 1.0,
+    "restitution": 0.1,
+    "friction": 0.9
+  },
+  "pbr": {
+    "metallic": 0.05,
+    "roughness": 0.95,
+    "emission": [0.0, 0.0, 0.0]
+  },
+  "tags": ["SOLID", "NATURAL"],
+  "item": {
+    "texture": "textures/items/mossy_stone"
+  }
+}
