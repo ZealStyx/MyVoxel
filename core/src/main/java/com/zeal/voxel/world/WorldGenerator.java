@@ -256,7 +256,6 @@ public class WorldGenerator {
     // Plateau slab vertical fade and material bands
     private static final float PLATEAU_VERTICAL_FADE_START = 0.65f;
     private static final float PLATEAU_TOP_FADE_MIN = 0.90f;
-    private static final double PLATEAU_DISK_RADIUS = 1200.0;
     private static final int PLATEAU_UNDERSIDE_DEPTH = 8;
     private static final int PLATEAU_CLIFF_FACE_DEPTH = 16;
 
@@ -492,7 +491,7 @@ public class WorldGenerator {
         }
 
         if (y > PLATEAU_SLAB_TOP && y <= PLATEAU_TERRAIN_MAX) {
-            if (edgeDensity > PLATEAU_EDGE_THRESHOLD && radialDistance < PLATEAU_DISK_RADIUS) {
+            if (edgeDensity > PLATEAU_EDGE_THRESHOLD + 0.25) {
                 int surfaceTop = getPlateauSurfaceTop(x, z, edgeDensity);
                 if (y <= surfaceTop) {
                     return getPlateauSurfaceBlock(x, y, z, surfaceTop);
@@ -566,22 +565,6 @@ public class WorldGenerator {
         double pillarRadius = getPillarRadius(x, z, y, seafloorHeight, localBaseY)
                 * Math.max(0.1, 1.0 + radialWarp);
         double pillarRatio = dist / Math.max(1.0, pillarRadius);
-
-        // Guarantee some narrow pillar support near the connection zone.
-        if (y >= localBaseY - 12 && y <= localBaseY) {
-            double nearTopFalloff = clamp01((double) (y - (localBaseY - 12)) / 12.0);
-            double maxRatio = 0.35 + 0.42 * nearTopFalloff;
-            return pillarRatio <= maxRatio;
-        }
-
-        // Make middle pillar zone slimmer below the connection zone.
-        if (y >= localBaseY - 40 && y < localBaseY - 12) {
-            double midT = clamp01((double) (y - (localBaseY - 40)) / 28.0);
-            double maxRatio = 0.2 + midT * 0.25;
-            if (pillarRatio > maxRatio) {
-                return false;
-            }
-        }
 
         double stemT = clamp01((double) (y - seafloorHeight)
                 / Math.max(1.0, localBaseY - seafloorHeight));
@@ -1170,10 +1153,6 @@ public class WorldGenerator {
             int localPlateauBase,
             double edgeDensity,
             int slabBottom) {
-        if (radialDistance > PLATEAU_DISK_RADIUS + 60.0) {
-            return BlockType.AIR;
-        }
-
         if (edgeDensity <= PLATEAU_EDGE_THRESHOLD) {
             return BlockType.AIR;
         }
@@ -1285,9 +1264,6 @@ public class WorldGenerator {
 
         double finalDepth = baseDepth + scaledRoughness;
 
-        // Compress bottom drops to avoid strong ceiling cliff between pillar and slab.
-        finalDepth *= 0.28; // create generally thinner dish wings while keeping shape
-
         int rawBottom = localBaseY + (int) Math.round(finalDepth);
         return Math.min(rawBottom, PLATEAU_SLAB_TOP - 4);
     }
@@ -1341,10 +1317,6 @@ public class WorldGenerator {
             return false;
         }
         if (y > PLATEAU_SLAB_TOP) {
-            return false;
-        }
-
-        if (radialDistance > PLATEAU_DISK_RADIUS) {
             return false;
         }
 
@@ -1446,13 +1418,45 @@ public class WorldGenerator {
     }
 
     private int getPlateauSurfaceTop(int x, int z, double edgeDensity) {
-        // Disabled—no above-slab terrain.
-        return PLATEAU_SLAB_TOP;
+        int base = PLATEAU_SLAB_TOP;
+
+        double strength = (edgeDensity - PLATEAU_EDGE_THRESHOLD)
+                / (1.0 - PLATEAU_EDGE_THRESHOLD);
+        strength = clamp01(strength);
+
+        if (strength < 0.75) {
+            return base;
+        }
+
+        double hillNoise = remap(noise2(
+                x * 0.018 + 4411.0,
+                z * 0.018 + 4411.0));
+        double extraHeight = hillNoise * 4.0 * (strength - 0.75) / 0.25;
+
+        return base + (int) Math.round(extraHeight);
     }
 
     private BlockType getPlateauSurfaceBlock(int x, int y, int z, int surfaceTop) {
-        // Disabled—no visible surface above slab.
-        return BlockType.AIR;
+        boolean topExposed = y == surfaceTop;
+
+        if (topExposed) {
+            if (y >= SNOWLINE) {
+                return BlockType.SNOW;
+            }
+            if (isInsideHotSpring(x, z)) {
+                return BlockType.MOSSY_STONE;
+            }
+            if (isInsideLakeBasin(x, z)) {
+                return BlockType.SAND;
+            }
+            return BlockType.GRASS;
+        }
+
+        if (y == surfaceTop - 1) {
+            return BlockType.DIRT;
+        }
+
+        return BlockType.STONE;
     }
 
     public double getPlateauEdgeDensity(int x, int z) {
