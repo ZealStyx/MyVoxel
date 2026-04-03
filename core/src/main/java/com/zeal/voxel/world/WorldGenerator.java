@@ -8,27 +8,6 @@ import com.zeal.voxel.block.BlockType;
  * The sole public entry point is getBlock(x, y, z) which returns the block type at that position.
  */
 @SuppressWarnings("unused")
-            // Crown range: also check plateau solid so the slab underside fills the gap.
-            if (y >= localBaseY) {
-                boolean plateauSolid = isPlateauSolid(
-                        x,
-                        dishBottom,
-                        z,
-                        radialDistance,
-                        edgeDensity,
-                        localThickness,
-                        dishBottom);
-                if (plateauSolid) {
-                    return getPlateauSlabBlock(
-                            x,
-                            y,
-                            z,
-                            radialDistance,
-                            edgeDensity,
-                            localThickness,
-                            dishBottom);
-                }
-            }
 public class WorldGenerator {
     private final long worldSeed;
     private final PerlinNoise noise;
@@ -501,6 +480,27 @@ public class WorldGenerator {
                     dishBottom);
             if (stemSolid) {
                 return getPillarSurfaceBlock(x, y, z, seafloorHeight, localBaseY);
+            }
+
+            if (y >= localBaseY) {
+                boolean plateauSolid = isPlateauSolid(
+                        x,
+                        y,
+                        z,
+                        radialDistance,
+                        edgeDensity,
+                        localThickness,
+                        dishBottom);
+                if (plateauSolid) {
+                    return getPlateauSlabBlock(
+                            x,
+                            y,
+                            z,
+                            radialDistance,
+                            edgeDensity,
+                            localThickness,
+                            dishBottom);
+                }
             }
 
             if (y >= localBaseY && y < dishBottom) {
