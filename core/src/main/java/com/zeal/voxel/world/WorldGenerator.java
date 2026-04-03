@@ -81,8 +81,7 @@ public class WorldGenerator {
     // PILLAR SHAPE CONSTANTS
     // ============================================================================
 
-    private static final double PILLAR_BASE_RADIUS = 72.0; // reduced for thinner support
-    private static final double PILLAR_TOP_RADIUS = 36.0;
+    private static final double PILLAR_BASE_RADIUS = 68.0;
     private static final int PILLAR_WARP_OCTAVES = 5;
     private static final double PILLAR_WARP_BASE_FREQ = 0.0028;
     private static final double PILLAR_WARP_LACUNARITY = 2.1;
@@ -97,7 +96,7 @@ public class WorldGenerator {
     private static final double PILLAR_WARP_OCTAVE_SEED_STEP = 1337.0;
     private static final int PILLAR_SEAFLOOR_PENETRATION = 12;
     private static final int PILLAR_SEAFLOOR_BLEND_HEIGHT = 40;
-    private static final double PILLAR_SEAFLOOR_FLARE_STRENGTH = 1.4; // stronger root flaring for visible blend
+    private static final double PILLAR_SEAFLOOR_FLARE_STRENGTH = 1.6;
     private static final double PILLAR_SEAFLOOR_DENSITY_THRESHOLD = 0.14;
     private static final double PILLAR_WAIST_HEIGHT_FRACTION = 0.46; // less symmetric hourglass
     private static final double PILLAR_WAIST_NARROWING = 0.58;
@@ -341,10 +340,23 @@ public class WorldGenerator {
      * Returns the local plateau slab base Y for column (x, z).
      */
     public int getPlateauBaseY(int x, int z) {
-        // Plateau base is a noise-driven value within [PLATEAU_SPAWN_Y_MIN, PLATEAU_SPAWN_Y_MAX].
-        double n = remap(noise2(x * PLATEAU_SPAWN_Y_NOISE_FREQ,
-                z * PLATEAU_SPAWN_Y_NOISE_FREQ + PLATEAU_SPAWN_Y_SEED_OFFSET));
-        int candidate = PLATEAU_SPAWN_Y_MIN + (int) Math.round(n * (PLATEAU_SPAWN_Y_MAX - PLATEAU_SPAWN_Y_MIN));
+        // Use PLATEAU_SPAWN_Y_NOISE_FREQ for spatial variation.
+        // Apply seed offset as small decorrelated per-axis shifts — do NOT add the
+        // raw seed value to the coordinate or it will destroy all spatial variation
+        // (8831 >> x*0.00055 means every sample lands at the same noise point).
+        double seedX = PLATEAU_SPAWN_Y_SEED_OFFSET * 0.00073;
+        double seedZ = PLATEAU_SPAWN_Y_SEED_OFFSET * 0.00041;
+        double n = noise.fractal2(
+            x * PLATEAU_SPAWN_Y_NOISE_FREQ + seedX,
+            z * PLATEAU_SPAWN_Y_NOISE_FREQ + seedZ,
+            3,
+            0.55,
+            2.1);
+
+        n = remap(n);
+
+        int range = PLATEAU_SPAWN_Y_MAX - PLATEAU_SPAWN_Y_MIN;
+        int candidate = PLATEAU_SPAWN_Y_MIN + (int) Math.round(n * range);
         return Math.max(PLATEAU_SPAWN_Y_MIN, Math.min(candidate, PLATEAU_SPAWN_Y_MAX));
     }
     
@@ -379,15 +391,17 @@ public class WorldGenerator {
             : -1;
 
         return getBlock(
-            x, y, z,
-            seafloorHeight,
-            localBaseY,
-            edgeDensity,
-            localThickness,
-            radialDistance,
-            dishBottom,
-            islandMaskRaw,
-            islandSurface);
+                x,
+                y,
+                z,
+                seafloorHeight,
+                localBaseY,
+                edgeDensity,
+                localThickness,
+                radialDistance,
+                dishBottom,
+                islandMaskRaw,
+                islandSurface);
     }
 
     /**
@@ -426,7 +440,6 @@ public class WorldGenerator {
                 return getPillarSurfaceBlock(x, y, z, seafloorHeight, localBaseY);
             }
 
-            // Stalactites can hang in the region between pillar top and slab underside.
             if (y >= localBaseY && y < dishBottom) {
                 BlockType stal = getStalactiteBlock(
                         x,
@@ -441,7 +454,6 @@ public class WorldGenerator {
                 }
             }
 
-            // Legacy stalactite check just below pillar top to preserve existing behavior.
             if (y >= localBaseY - STALACTITE_MAX_LENGTH && y < localBaseY) {
                 BlockType stal = getStalactiteBlock(
                         x,
@@ -482,7 +494,6 @@ public class WorldGenerator {
                         dishBottom);
             }
 
-            // Minimize underside / stalactites to avoid double-layer between pillar and plateau.
             if (y < dishBottom && y >= dishBottom - 2) {
                 return BlockType.AIR;
             }
@@ -504,98 +515,86 @@ public class WorldGenerator {
     }
 
     /**
-     * Unified solid test for stem + slab.
+     * Unified solid check for pillar stem + plateau slab.
+     * The pillar now gradually flares and blends into the plateau rim using the same edgeDensity field.
      */
     private boolean isStructureSolid(
-            int x,
-            int y,
-            int z,
+            int x, int y, int z,
             int seafloorHeight,
             int localBaseY,
             double edgeDensity,
             int localThickness,
             double radialDistance,
             int dishBottom) {
-        if (isFractureColumn(x, z)) {
-            return false;
-        }
 
-        // Above slab bottom is handled by plateau block logic.
+        if (isFractureColumn(x, z)) return false;
+
+        // Above slab bottom → normal plateau logic
         if (y >= dishBottom) {
             return isPlateauSolid(x, y, z, radialDistance, edgeDensity, localThickness, dishBottom);
         }
 
-        // Crown zone between pillar top and slab underside: force solid to ensure connection.
+        // Crown zone: force solid bridge only where the plateau actually exists.
+        // Without the edgeDensity guard this fills a global sky layer across the whole world.
         if (y >= localBaseY && y < dishBottom) {
-            return true;
+            return edgeDensity > PLATEAU_EDGE_THRESHOLD;
         }
 
-        // Allow pillar root to extend below seafloor into the sediment.
         if (y < seafloorHeight - PILLAR_SEAFLOOR_PENETRATION) {
             return false;
         }
 
-        // No forced full-band fill; preserve natural holes and sea ties.
-        // Existing pillar-handling logic will determine local connectivity.
+        // Only strong plateaus get good pillars
+        double pillarStrength = (edgeDensity - PLATEAU_EDGE_THRESHOLD)
+                              / Math.max(0.01, 1.0 - PLATEAU_EDGE_THRESHOLD);
+        pillarStrength = clamp01(pillarStrength);
+        if (pillarStrength < 0.52) return false;   // ← tuned for fewer weak pillars
 
-        double dwx = noise2(
-            (x + PILLAR_WARP_SEED_A) * PILLAR_DOMAIN_WARP_FREQ,
-            (z + PILLAR_WARP_SEED_A) * PILLAR_DOMAIN_WARP_FREQ) * PILLAR_DOMAIN_WARP_STRENGTH;
-        double dwz = noise2(
-            (x + PILLAR_WARP_SEED_B) * PILLAR_DOMAIN_WARP_FREQ,
-            (z + PILLAR_WARP_SEED_B) * PILLAR_DOMAIN_WARP_FREQ) * PILLAR_DOMAIN_WARP_STRENGTH;
+        // Domain warp for local pillar shape
+        double dwx = noise2((x + PILLAR_WARP_SEED_A) * PILLAR_DOMAIN_WARP_FREQ,
+                            (z + PILLAR_WARP_SEED_A) * PILLAR_DOMAIN_WARP_FREQ) * PILLAR_DOMAIN_WARP_STRENGTH;
+        double dwz = noise2((x + PILLAR_WARP_SEED_B) * PILLAR_DOMAIN_WARP_FREQ,
+                            (z + PILLAR_WARP_SEED_B) * PILLAR_DOMAIN_WARP_FREQ) * PILLAR_DOMAIN_WARP_STRENGTH;
+
         double wx = x + dwx;
         double wz = z + dwz;
         double dist = Math.sqrt(wx * wx + wz * wz);
 
-        double angle = Math.atan2(wz, wx);
-        double radialWarp = 0.0;
-        double freq = PILLAR_WARP_BASE_FREQ;
-        double amp = PILLAR_WARP_MAX_DISPLACEMENT;
-        for (int oct = 0; oct < PILLAR_WARP_OCTAVES; oct++) {
-            double seed = (PILLAR_WARP_SEED_C + oct * PILLAR_WARP_OCTAVE_SEED_STEP)
-                    * PILLAR_WARP_OCTAVE_SEED_SCALE;
-            radialWarp += noise2(
-                    Math.cos(angle) * freq * dist + seed,
-                    Math.sin(angle) * freq * dist + seed) * amp;
-            freq *= PILLAR_WARP_LACUNARITY;
-            amp *= PILLAR_WARP_PERSISTENCE;
-        }
+        // Get flared radius from the improved getPillarRadius
+        double pillarRadius = getPillarRadius(x, z, y, seafloorHeight, localBaseY);
 
-        double pillarRadius = getPillarRadius(x, z, y, seafloorHeight, localBaseY)
-                * Math.max(0.1, 1.0 + radialWarp);
-        double pillarRatio = dist / Math.max(1.0, pillarRadius);
+        double ratio = dist / Math.max(1.0, pillarRadius);
 
-        double stemT = clamp01((double) (y - seafloorHeight)
-                / Math.max(1.0, localBaseY - seafloorHeight));
+        // Stem progress (0 = seafloor, 1 = plateau base)
+        double stemT = clamp01((double)(y - seafloorHeight) / Math.max(1.0, localBaseY - seafloorHeight));
 
+        // Plateau membership from the same noise that creates the slab
         double plateauMembership = clamp01((edgeDensity - PLATEAU_EDGE_THRESHOLD)
-                / Math.max(BASE_SEA_EPSILON, 1.0 - PLATEAU_EDGE_THRESHOLD));
-        double pillarMembership = clamp01(1.0 - smoothstep(
-                PILLAR_EDGE_INNER_RATIO,
-                PILLAR_EDGE_OUTER_RATIO,
-                pillarRatio));
+                                         / Math.max(BASE_SEA_EPSILON, 1.0 - PLATEAU_EDGE_THRESHOLD));
 
-        double blendT = smoothstep(STEM_BLEND_START_FRACTION, STEM_BLEND_END_FRACTION, stemT);
+        double pillarMembership = clamp01(1.0 - smoothstep(PILLAR_EDGE_INNER_RATIO, PILLAR_EDGE_OUTER_RATIO, ratio));
+
+        // Blend earlier and stronger near the top → smooth transition into rim
+        double blendT = smoothstep(0.25, 1.0, stemT);   // ← changed from 0.35/0.4 for smoother rim
         double membership = lerp(pillarMembership, plateauMembership, blendT);
 
+        // Surface noise for ragged edges
         double surfaceNoise =
             remap(noise3(x * 0.08 + 77.31, y * 0.06, z * 0.08 + 13.71)) * 0.45
             + remap(noise3(x * 0.18 + 31.17, y * 0.14 + 9.33, z * 0.18 + 55.91)) * 0.30
             + remap(noise3(x * 0.40 + 19.73, y * 0.33 + 4.17, z * 0.40 + 8.63)) * 0.15
             + remap(noise3(x * 0.009 + 5.11, y * 0.007, z * 0.009 + 2.37)) * 0.10;
+
         double threshold = lerp(STEM_THRESHOLD_LOW, STEM_THRESHOLD_HIGH, stemT);
 
+        // Root flare handling
         int rootBottom = seafloorHeight - PILLAR_SEAFLOOR_PENETRATION;
         int rootTop = seafloorHeight + PILLAR_SEAFLOOR_BLEND_HEIGHT;
         if (y < rootTop) {
-            // Force stable central core on roots to avoid narrow, fast-tapering columns.
-            double coreRadius = Math.max(1.0, getPillarRadius(x, z, y, seafloorHeight, localBaseY) * 0.6);
-            if (dist < coreRadius) {
-                return true;
-            }
+            double coreRadius = Math.max(1.0, getPillarRadius(x, z, y, seafloorHeight, localBaseY) * 0.65);
+            if (dist < coreRadius) return true;
 
-            double rootT = clamp01((double) (y - rootBottom) / Math.max(1, rootTop - rootBottom));
+            double rootT = clamp01((double)(y - rootBottom) / Math.max(1, rootTop - rootBottom));
             double dissolveThreshold = PILLAR_SEAFLOOR_DENSITY_THRESHOLD * (1.0 - rootT);
             double densityAtDist = Math.max(0.0, 1.0 - (dist / Math.max(1.0, pillarRadius)));
             return densityAtDist > dissolveThreshold;
@@ -603,7 +602,7 @@ public class WorldGenerator {
 
         return membership > (threshold * surfaceNoise);
     }
-
+    
     private boolean isStructureSolidAt(int x, int y, int z) {
         int seafloorHeight = getSeafloorHeight(x, z);
         int localBaseY = getPlateauBaseY(x, z);
@@ -958,56 +957,40 @@ public class WorldGenerator {
     }
 
     /**
-     * Returns the effective pillar radius at position (x, z, y).
+     * Returns the effective pillar radius at (x, z, y).
+     * Gradually widens toward the plateau rim for a smooth, natural transition.
      */
-    private double getPillarRadius(int x, int z, int y, int seafloorHeight, int pillarTopY) {
+    private double getPillarRadius(int x, int z, int y, int seafloorHeight, int localBaseY) {
         int pillarBaseY = seafloorHeight;
-        double pillarHeight = Math.max(1.0, pillarTopY - pillarBaseY);
-        double t = clamp01((double) (y - pillarBaseY) / pillarHeight);
+        double pillarHeight = Math.max(1.0, localBaseY - pillarBaseY);
+        double t = clamp01((double) (y - pillarBaseY) / pillarHeight);   // 0.0 = bottom, ~1.0 = near plateau
 
-        // Soften the waist to avoid a sharp cone narrowing around y≈128.
-        double waistT = 0.58; // slightly higher than default to keep more width lower.
-        double baseRadius = PILLAR_BASE_RADIUS;
-        double waistRadius = PILLAR_TOP_RADIUS * 0.90; // less aggressive thinning.
-        double topRadius = PILLAR_TOP_RADIUS;
+        // Base → significantly wider at top (this controls the flare strength)
+        double baseRadius = PILLAR_BASE_RADIUS;           // 68.0
+        double topRadius  = PILLAR_BASE_RADIUS * 2.0;     // ← increased to 2.0 for stronger flare
 
-        double nomRadius;
-        if (t < waistT) {
-            double localT = smoothstep(0.0, 1.0, t / Math.max(BASE_SEA_EPSILON, waistT));
-            nomRadius = lerp(baseRadius, waistRadius, localT);
-        } else {
-            double localT = smoothstep(0.0, 1.0,
-                (t - waistT) / Math.max(BASE_SEA_EPSILON, 1.0 - waistT));
-            nomRadius = lerp(waistRadius, topRadius, localT);
+        // Smooth acceleration curve (slow start, stronger widening near rim)
+        double flareCurve = t * t * (3.0 - 2.0 * t);
+
+        double targetRadius = lerp(baseRadius, topRadius, flareCurve);
+
+        // Root flare near seafloor
+        int rootTop = seafloorHeight + PILLAR_SEAFLOOR_BLEND_HEIGHT;
+        if (y < rootTop) {
+            double rootT = clamp01((double) (y - (seafloorHeight - PILLAR_SEAFLOOR_PENETRATION))
+                                 / Math.max(1, rootTop - (seafloorHeight - PILLAR_SEAFLOOR_PENETRATION)));
+            double rootFlare = 1.0 + (1.0 - rootT) * PILLAR_SEAFLOOR_FLARE_STRENGTH * 0.75;
+            targetRadius *= rootFlare;
         }
 
-        int rootZoneBottom = seafloorHeight - PILLAR_SEAFLOOR_PENETRATION;
-        int rootZoneTop = seafloorHeight + PILLAR_SEAFLOOR_BLEND_HEIGHT;
-        if (y < rootZoneTop) {
-            // t=0 at deepest root, t=1 at top of blend zone.
-            double rootT = clamp01((double) (y - rootZoneBottom) / Math.max(1, rootZoneTop - rootZoneBottom));
-            double rootCurve = 1.0 - (rootT * rootT * rootT); // cubic ease-in
-            nomRadius *= (1.0 + rootCurve * (PILLAR_SEAFLOOR_FLARE_STRENGTH * 0.62));
-        }
-
-        // Avoid extreme skinny taper in pillars (prevents small cone artifacts).
-        double pillarMinRadius = PILLAR_TOP_RADIUS * 0.90;
-        nomRadius = Math.max(nomRadius, pillarMinRadius);
-
-        // Introduce irregular radius via additional high-frequency noise
+        // Organic raggedness
         double ragged = remap(noise3(
                 x * PILLAR_RAGGEDNESS_FREQ,
-                y * PILLAR_RAGGEDNESS_FREQ,
+                y * PILLAR_RAGGEDNESS_FREQ * 0.7,
                 z * PILLAR_RAGGEDNESS_FREQ));
-        double raggedScale = (ragged - 0.5) * 2.0 * PILLAR_RAGGEDNESS_STRENGTH;
-        nomRadius *= (1.0 + raggedScale);
+        targetRadius *= (1.0 + (ragged - 0.5) * 2.0 * PILLAR_RAGGEDNESS_STRENGTH);
 
-        // Occasional local thinning or bulges for unnatural pillar profiles
-        if ((remap(noise2(x * 0.015, z * 0.015)) > 0.92) && y % 8 < 4) {
-            nomRadius *= 0.85;
-        }
-
-        return nomRadius;
+        return Math.max(PILLAR_BASE_RADIUS * 0.75, targetRadius);
     }
     
     private boolean isInsidePillar(int x, int y, int z) {

@@ -37,4 +37,18 @@ public class ColumnPosition {
     public static long key(int x, int z) {
         return ((long) x << 32) | (z & 0xFFFFFFFFL);
     }
+
+    /**
+     * Decode packed key back to column X.
+     */
+    public static int xFromKey(long key) {
+        return (int) (key >> 32);
+    }
+
+    /**
+     * Decode packed key back to column Z.
+     */
+    public static int zFromKey(long key) {
+        return (int) key;
+    }
 }

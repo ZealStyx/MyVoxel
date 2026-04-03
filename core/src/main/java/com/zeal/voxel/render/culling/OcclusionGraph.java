@@ -72,30 +72,34 @@ public class OcclusionGraph {
         }
     }
 
-    public void beginFrame(Vector3 viewerWorldPos, Map<Long, BlockColumn> loadedColumns, int columnSize) {
+    public void beginFrameColumns(Vector3 viewerWorldPos, Map<Long, BlockColumn> loadedColumns) {
         if (loadedColumns.isEmpty()) {
             reachableChunks = Collections.emptySet();
             return;
         }
 
         ChunkPosition currentViewer = new ChunkPosition(
-            (int) Math.floor(viewerWorldPos.x / columnSize),
-            (int) Math.floor(viewerWorldPos.z / columnSize));
+            (int) Math.floor(viewerWorldPos.x / Constants.COLUMN_SIZE),
+            (int) Math.floor(viewerWorldPos.z / Constants.COLUMN_SIZE));
 
+        boolean viewerMoved = !currentViewer.equals(viewerChunk);
+        if (viewerMoved || graphsDirty || reachableChunks.size() != loadedColumns.size()) {
+            viewerChunk = currentViewer;
+            graphsDirty = false;
+            recomputeReachableColumns(loadedColumns);
+        }
+
+        // Trigger graph rebuilds for columns that need it
         for (Map.Entry<Long, BlockColumn> entry : loadedColumns.entrySet()) {
             ChunkPosition cp = columnKeyToPosition(entry.getKey());
             if (cp != null) {
                 rebuildColumnGraphAsync(entry.getValue(), cp);
             }
         }
+    }
 
-        boolean viewerMoved = !currentViewer.equals(viewerChunk);
-        boolean sizeChanged = reachableChunks.size() != loadedColumns.size();
-        if (viewerMoved || sizeChanged || graphsDirty) {
-            viewerChunk = currentViewer;
-            graphsDirty = false;
-            recomputeReachableColumns(loadedColumns);
-        }
+    public void beginFrame(Vector3 viewerWorldPos, Map<Long, BlockColumn> loadedColumns, int columnSize) {
+        beginFrameColumns(viewerWorldPos, loadedColumns);
     }
 
     private void rebuildColumnGraphAsync(BlockColumn column, ChunkPosition cp) {
@@ -263,28 +267,35 @@ public class OcclusionGraph {
     }
 
     private boolean[][] computeColumnGraph(BlockColumn column) {
-        boolean[][] reach = new boolean[6][6];
-        for (int a = 0; a < 6; a++) {
-            for (int b = 0; b < 6; b++) {
-                if (a == b) {
-                    reach[a][b] = true;
-                } else {
-                    reach[a][b] = false;
-                }
-            }
-        }
+        boolean[][] reach = fullReachability(); // start with everything connected
 
-        for (int sliceY = 0; sliceY < Constants.WORLD_HEIGHT; sliceY += Constants.CHUNK_SIZE) {
-            Chunk slice = column.extractSlice(sliceY);
-            boolean[][] sliceGraph = computeGraph(slice);
-            for (int a = 0; a < 6; a++) {
-                for (int b = 0; b < 6; b++) {
-                    reach[a][b] |= sliceGraph[a][b];
-                }
-            }
+        // For a full column, we only really care about horizontal traversal between columns.
+        // Vertical traversal inside one column is almost always possible unless the whole column is solid.
+
+        // Simple heuristic for now: if the column has any air path from top to bottom, allow UP/DOWN
+        boolean hasVerticalPath = hasVerticalAirPath(column);
+        if (!hasVerticalPath) {
+            reach[UP][DOWN] = reach[DOWN][UP] = false;
         }
 
         return reach;
+    }
+
+    private boolean hasVerticalAirPath(BlockColumn column) {
+        for (int lx = 0; lx < Constants.COLUMN_SIZE; lx++) {
+            for (int lz = 0; lz < Constants.COLUMN_SIZE; lz++) {
+                boolean connected = true;
+                for (int y = 0; y < Constants.WORLD_HEIGHT - 1; y++) {
+                    if (!isAirLike(column.getBlock(lx, y, lz)) && 
+                        !isAirLike(column.getBlock(lx, y + 1, lz))) {
+                        connected = false;
+                        break;
+                    }
+                }
+                if (connected) return true;
+            }
+        }
+        return false;
     }
 
     private void recomputeReachable(Map<ChunkPosition, Chunk> loadedChunks) {
@@ -458,6 +469,13 @@ public class OcclusionGraph {
             }
         }
         return graph;
+    }
+
+    /**
+     * Get count of reachable columns for debug/telemetry.
+     */
+    public int getReachableCount() {
+        return reachableChunks.size();
     }
 
     public void dispose() {

@@ -33,6 +33,8 @@ import com.zeal.voxel.render.shadow.CascadedShadowMap;
 import com.zeal.voxel.input.GameInputManager;
 import com.zeal.voxel.util.Constants;
 import com.zeal.voxel.world.ColumnStreamer;
+import com.zeal.voxel.world.ColumnPosition;
+import com.zeal.voxel.world.BlockColumn;
 import com.zeal.voxel.world.ProceduralColumnTerrainGenerator;
 import com.zeal.voxel.world.WorldGrid;
 import com.zeal.voxel.world.WorldGenerator;
@@ -185,19 +187,32 @@ public class GameScreen extends ScreenAdapter {
         // ── 1. UPDATE GAME LOGIC ──
         columnStreamer.update(camera.position);
 
-        // Sync modified chunks with physics
-        // TODO: Update for column-based system
-        /*
-        if (!worldGrid.getModifiedChunks().isEmpty()) {
-            for (com.badlogic.gdx.math.GridPoint3 gp : worldGrid.getModifiedChunks()) {
-                com.zeal.voxel.world.Chunk chunk = worldGrid.getChunk(gp);
-                if (chunk != null) {
-                    chunkStreamer.updateChunkPhysics(new com.zeal.voxel.world.ChunkPosition(gp.x, gp.z), chunk);
+        // Sync modified columns with physics.
+        if (!worldGrid.getModifiedColumnKeys().isEmpty()) {
+            for (long key : worldGrid.getModifiedColumnKeys()) {
+                int cx = ColumnPosition.xFromKey(key);
+                int cz = ColumnPosition.zFromKey(key);
+                BlockColumn column = worldGrid.getColumn(cx, cz);
+                if (column != null) {
+                    columnStreamer.updateColumnPhysics(cx, cz, column);
                 }
             }
-            worldGrid.clearModifiedChunks();
+            worldGrid.clearModifiedColumnKeys();
         }
-        */
+
+        if (Gdx.input.isKeyJustPressed(Input.Keys.F1)) {
+            System.out.println("Loaded columns: " + worldGrid.getColumns().size());
+            System.out.println("Modified columns: " + worldGrid.getModifiedColumnKeys().size());
+
+            int cx = (int) Math.floor(camera.position.x / Constants.COLUMN_SIZE);
+            int cz = (int) Math.floor(camera.position.z / Constants.COLUMN_SIZE);
+            BlockColumn col = worldGrid.getColumn(cx, cz);
+            System.out.println("Player column (" + cx + "," + cz + ") exists: " + (col != null));
+        }
+
+        if (Gdx.input.isKeyJustPressed(Input.Keys.F2)) {
+            System.out.println("Occlusion reachable columns: " + occlusionGraph.getReachableCount());
+        }
 
         // CORRECT ORDER — ENFORCED FOR CAPSULE CONTROLLER
         // 1. Update player input and controllers

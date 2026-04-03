@@ -2,8 +2,8 @@ package com.zeal.voxel.world;
 
 import com.badlogic.gdx.math.Vector3;
 import com.zeal.voxel.physics.BulletWorld;
+import com.zeal.voxel.physics.ColumnPhysicsCollider;
 import com.zeal.voxel.physics.PhysicsConstants;
-import com.zeal.voxel.physics.StaticChunkBody;
 import com.zeal.voxel.render.culling.OcclusionGraph;
 import com.zeal.voxel.util.Constants;
 import com.zeal.voxel.util.TerrainConstants;
@@ -27,7 +27,6 @@ public class ColumnStreamer {
     private static final int MAX_COLUMN_LOADS_PER_FRAME = 8;
     private static final int STARTUP_COLUMN_LOAD_BURST = 24;
     private static final int MAX_COLUMN_UNLOADS_PER_FRAME = 4;
-    private static final int PHYSICS_SLICE_COUNT = Constants.WORLD_HEIGHT / Constants.CHUNK_SIZE;
 
     private static final int MAX_COLUMN_CACHE_SIZE = 4096;
 
@@ -42,7 +41,7 @@ public class ColumnStreamer {
     );
     private final Map<Long, BlockColumn> readyColumns = new ConcurrentHashMap<>();
     private final Set<Long> loadingColumns = ConcurrentHashMap.newKeySet();
-    private final Map<Long, StaticChunkBody> staticColumnBodies = new HashMap<>();
+    private final Map<Long, ColumnPhysicsCollider> columnColliders = new HashMap<>();
     private final ColumnTerrainGenerator terrainGenerator;
     private final WorldGrid worldGrid;
     private final BulletWorld bulletWorld;
@@ -174,9 +173,11 @@ public class ColumnStreamer {
             }
 
             long key = ColumnPosition.key(cp.x, cp.z);
-            BlockColumn removed = loadedColumns.remove(key);            if (removed != null) {
+            BlockColumn removed = loadedColumns.remove(key);
+            if (removed != null) {
                 columnCache.put(key, removed);
-            }            worldGrid.getColumns().remove(key);
+            }
+            worldGrid.getColumns().remove(key);
             removeColumnCollision(cp);
 
             if (occlusionGraph != null) {
@@ -191,16 +192,32 @@ public class ColumnStreamer {
         }
     }
 
+    /**
+     * Rebuild physics and mark column for mesh rebuild after edits.
+     */
+    public void updateColumnPhysics(int columnX, int columnZ, BlockColumn column) {
+        if (column == null) return;
+
+        ColumnPosition cp = new ColumnPosition(columnX, columnZ);
+
+        // Update physics with full-height collider
+        removeColumnCollision(cp);
+        buildColumnCollision(cp, column);
+
+        // Mark the column dirty so WorldRenderer knows it needs remeshing
+        column.setDirty(true);
+    }
+
     public Map<Long, BlockColumn> getLoadedColumns() {
         return loadedColumns;
     }
 
     public void dispose() {
-        for (StaticChunkBody scb : staticColumnBodies.values()) {
-            bulletWorld.removeRigidBody(scb.rigidBody);
-            scb.dispose();
+        for (ColumnPhysicsCollider c : columnColliders.values()) {
+            bulletWorld.removeRigidBody(c.getRigidBody());
+            c.dispose();
         }
-        staticColumnBodies.clear();
+        columnColliders.clear();
         loadedColumns.clear();
         columnCache.clear();
         readyColumns.clear();
@@ -209,55 +226,39 @@ public class ColumnStreamer {
     }
 
     private void buildColumnCollision(ColumnPosition cp, BlockColumn column) {
-        for (int sliceIdx = 0; sliceIdx < PHYSICS_SLICE_COUNT; sliceIdx++) {
-            int sliceY = sliceIdx * Constants.CHUNK_SIZE;
-            Chunk slice = column.extractSlice(sliceY);
-            if (isSliceEmpty(slice)) {
-                continue;
-            }
+        long key = ColumnPosition.key(cp.x, cp.z);
 
-            Vector3 offset = new Vector3(
-                cp.x * Constants.COLUMN_SIZE,
-                sliceY,
-                cp.z * Constants.COLUMN_SIZE
-            );
-            StaticChunkBody scb = StaticChunkBody.build(slice, worldGrid, cp.x, sliceIdx, cp.z, offset);
-            if (scb == null) {
-                continue;
-            }
-
-            bulletWorld.addRigidBody(scb.rigidBody, PhysicsConstants.GROUP_WORLD, PhysicsConstants.GROUP_ALL);
-            bulletWorld.registerObject(scb.rigidBody, scb);
-            staticColumnBodies.put(sliceKey(cp.x, sliceIdx, cp.z), scb);
+        // Remove old collider first
+        ColumnPhysicsCollider old = columnColliders.remove(key);
+        if (old != null) {
+            old.dispose();
         }
+
+        // Place the rigid body at the column's world-space origin (bottom corner).
+        // CompoundShapeBuilder uses local coords [0..COLUMN_SIZE, 0..WORLD_HEIGHT, 0..COLUMN_SIZE]
+        // so the body origin must be at the column's (0,0,0) corner, not its center.
+        Vector3 worldPos = new Vector3(
+            cp.x * Constants.COLUMN_SIZE,
+            0f,
+            cp.z * Constants.COLUMN_SIZE
+        );
+
+        ColumnPhysicsCollider collider = new ColumnPhysicsCollider(worldPos, column);
+
+        bulletWorld.addRigidBody(collider.getRigidBody(),
+                                 PhysicsConstants.GROUP_WORLD,
+                                 PhysicsConstants.GROUP_ALL);
+
+        bulletWorld.registerObject(collider.getRigidBody(), collider);
+        columnColliders.put(key, collider);
     }
 
     private void removeColumnCollision(ColumnPosition cp) {
-        for (int sliceIdx = 0; sliceIdx < PHYSICS_SLICE_COUNT; sliceIdx++) {
-            StaticChunkBody scb = staticColumnBodies.remove(sliceKey(cp.x, sliceIdx, cp.z));
-            if (scb != null) {
-                bulletWorld.removeRigidBody(scb.rigidBody);
-                scb.dispose();
-            }
+        long key = ColumnPosition.key(cp.x, cp.z);
+        ColumnPhysicsCollider collider = columnColliders.remove(key);
+        if (collider != null) {
+            bulletWorld.removeRigidBody(collider.getRigidBody());
+            collider.dispose();
         }
-    }
-
-    private boolean isSliceEmpty(Chunk chunk) {
-        for (int x = 0; x < Constants.CHUNK_SIZE; x++) {
-            for (int y = 0; y < Constants.CHUNK_SIZE; y++) {
-                for (int z = 0; z < Constants.CHUNK_SIZE; z++) {
-                    if (chunk.getBlock(x, y, z) != 0) {
-                        return false;
-                    }
-                }
-            }
-        }
-        return true;
-    }
-
-    private long sliceKey(int cx, int sliceIdx, int cz) {
-        return ((long) (cx & 0xFFFF) << 32)
-            | ((long) (sliceIdx & 0xFF) << 24)
-            | (cz & 0xFFFFL);
     }
 }
