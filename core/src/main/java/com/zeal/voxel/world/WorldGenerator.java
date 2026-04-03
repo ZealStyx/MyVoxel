@@ -8,6 +8,27 @@ import com.zeal.voxel.block.BlockType;
  * The sole public entry point is getBlock(x, y, z) which returns the block type at that position.
  */
 @SuppressWarnings("unused")
+            // Crown range: also check plateau solid so the slab underside fills the gap.
+            if (y >= localBaseY) {
+                boolean plateauSolid = isPlateauSolid(
+                        x,
+                        dishBottom,
+                        z,
+                        radialDistance,
+                        edgeDensity,
+                        localThickness,
+                        dishBottom);
+                if (plateauSolid) {
+                    return getPlateauSlabBlock(
+                            x,
+                            y,
+                            z,
+                            radialDistance,
+                            edgeDensity,
+                            localThickness,
+                            dishBottom);
+                }
+            }
 public class WorldGenerator {
     private final long worldSeed;
     private final PerlinNoise noise;
@@ -29,16 +50,20 @@ public class WorldGenerator {
     private static final int MAX_MOUNTAIN_HEIGHT = 0;
     
     // Floating slab placement limit and thickness definitions.
-    private static final int PLATEAU_SLAB_BOTTOM = 150; // minimum possible base
+    private static final int PLATEAU_SLAB_BOTTOM = 130; // minimum possible base
     private static final int PLATEAU_SLAB_THICKNESS = 16;
-    private static final int PLATEAU_SLAB_TOP = 200; // global maximum cap for plateau
-
-    // Maximum height that plateau terrain can reach (hard cap for the whole world)
-    private static final int PLATEAU_TERRAIN_MAX = PLATEAU_SLAB_TOP;
+    private static final int PLATEAU_SLAB_TOP = 160; // global maximum cap for plateau
+    // How many blocks the rim droops below localBaseY at the very edge
+    private static final int PLATEAU_RIM_DROOP_MAX = 20;
+    // edgeDensity band over which the droop fades from max to zero (inward from threshold)
+    private static final double PLATEAU_RIM_DROOP_BAND = 0.18;
+    // Noise on the droop so it's uneven and organic
+    private static final double PLATEAU_RIM_DROOP_NOISE_FREQ = 0.031;
+    private static final double PLATEAU_RIM_DROOP_NOISE_SEED = 5537.0;
 
     // Allow plateau base to slide through this range (with thickness still 16).
-    private static final int PLATEAU_SPAWN_Y_MIN = 150;
-    private static final int PLATEAU_SPAWN_Y_MAX = 184; // so base+thickness stays <= 200
+    private static final int PLATEAU_SPAWN_Y_MIN = 130;
+    private static final int PLATEAU_SPAWN_Y_MAX = 144; // 144 + 16 thickness = 160 = PLATEAU_SLAB_TOP
 
     private static final double PLATEAU_SPAWN_Y_NOISE_FREQ = 0.00055;
     private static final double PLATEAU_SPAWN_Y_SEED_OFFSET = 8831.0;
@@ -70,6 +95,30 @@ public class WorldGenerator {
     // Plateau surface flattening (more plains like).
     private static final double PLATEAU_SURFACE_FLAT_FRACTION = 0.65;
     private static final int PLATEAU_SURFACE_MAX_VAR = 12;
+    // Uneven surface height on top of the slab — how many blocks the surface can rise above the flat slab top
+    private static final int PLATEAU_SURFACE_EXTRA_MAX = 20;
+    private static final double PLATEAU_SURFACE_WARP_FREQ = 0.009;
+    private static final double PLATEAU_SURFACE_WARP_STR = 22.0;
+    private static final double PLATEAU_SURFACE_WARP_SEED = 18229.0;
+    private static final double PLATEAU_SURFACE_FREQ_COARSE = 0.0055;
+    private static final double PLATEAU_SURFACE_FREQ_MID = 0.014;
+    private static final double PLATEAU_SURFACE_FREQ_FINE = 0.034;
+    private static final double PLATEAU_SURFACE_AMP_COARSE = 0.52;
+    private static final double PLATEAU_SURFACE_AMP_MID = 0.31;
+    private static final double PLATEAU_SURFACE_AMP_FINE = 0.17;
+    private static final double PLATEAU_SURFACE_FLAT_BIAS = 0.38;
+
+    // Erosion — carves channels and gullies into the surface, lowering it unevenly
+    private static final double PLATEAU_EROSION_FREQ_A = 0.021;
+    private static final double PLATEAU_EROSION_FREQ_B = 0.047;
+    private static final double PLATEAU_EROSION_STRENGTH = 0.55;
+    private static final double PLATEAU_EROSION_SEED = 33791.0;
+
+    // Fine surface detail — small bumps and pits like weathered rock
+    private static final double PLATEAU_DETAIL_FREQ_A = 0.09;
+    private static final double PLATEAU_DETAIL_FREQ_B = 0.19;
+    private static final double PLATEAU_DETAIL_AMP = 3.0;
+    private static final double PLATEAU_DETAIL_SEED = 7213.0;
     
     // Y at which still lake water surfaces sit (a few blocks above plateau slab top)
     private static final int LAKE_LEVEL = PLATEAU_SLAB_TOP + 3;
@@ -102,6 +151,12 @@ public class WorldGenerator {
     private static final double PILLAR_WAIST_NARROWING = 0.58;
     private static final double PILLAR_RAGGEDNESS_STRENGTH = 0.18; // adds natural asymmetry
     private static final double PILLAR_RAGGEDNESS_FREQ = 0.022;
+    private static final double PILLAR_FBM_FREQ = 0.009;
+    private static final double PILLAR_FBM_OCTAVES = 4;
+    private static final double PILLAR_FBM_PERSIST = 0.50;
+    private static final double PILLAR_FBM_LACUN = 2.05;
+    private static final double PILLAR_FBM_STRENGTH = 0.22;
+    private static final double PILLAR_FBM_SEED = 9371.0;
     private static final double PILLAR_EDGE_INNER_RATIO = 0.92;
     private static final double PILLAR_EDGE_OUTER_RATIO = 1.08;
     private static final double PILLAR_CRACKED_RATIO = 0.80;
@@ -212,6 +267,14 @@ public class WorldGenerator {
     private static final double SEAFLOOR_PATCH_THRESHOLD = 0.72;
     private static final double SEAFLOOR_PATCH_STRENGTH = 0.18;
     private static final double SEAFLOOR_LAYER_SEED = 733.0;
+    private static final double SEAFLOOR_RIDGE_FREQ = 0.0038;
+    private static final double SEAFLOOR_RIDGE_SEED = 3317.0;
+    private static final int SEAFLOOR_RIDGE_AMP = 6;
+    private static final double SEAFLOOR_WARP_FREQ = 0.0012;
+    private static final double SEAFLOOR_WARP_STRENGTH = 28.0;
+    private static final double SEAFLOOR_WARP_SEED = 7741.0;
+    private static final double SEAFLOOR_DETAIL_FREQ = 0.028;
+    private static final int SEAFLOOR_DETAIL_AMP = 3;
 
     // Island shape/hill blend weights
     private static final double ISLAND_SHAPE_WEIGHT_COARSE = 0.60;
@@ -421,7 +484,7 @@ public class WorldGenerator {
             int islandSurface) {
 
         // Fracture shafts provide direct column-access from sky plateau down to sea level.
-        if (isFractureColumn(x, z) && y >= SEA_WATER_LEVEL && y <= PLATEAU_TERRAIN_MAX) {
+        if (isFractureColumn(x, z) && y >= SEA_WATER_LEVEL && y <= PLATEAU_SLAB_TOP + PLATEAU_SURFACE_EXTRA_MAX) {
             return BlockType.AIR;
         }
 
@@ -474,7 +537,7 @@ public class WorldGenerator {
             return BlockType.AIR;
         }
 
-        if (y <= PLATEAU_SLAB_TOP) {
+        if (y <= PLATEAU_SLAB_TOP + PLATEAU_SURFACE_EXTRA_MAX) {
             boolean plateauSolid = isPlateauSolid(
                     x,
                     y,
@@ -492,21 +555,6 @@ public class WorldGenerator {
                         edgeDensity,
                         localThickness,
                         dishBottom);
-            }
-
-            if (y < dishBottom && y >= dishBottom - 2) {
-                return BlockType.AIR;
-            }
-
-            return BlockType.AIR;
-        }
-
-        if (y > PLATEAU_SLAB_TOP && y <= PLATEAU_TERRAIN_MAX) {
-            if (edgeDensity > PLATEAU_EDGE_THRESHOLD + 0.25) {
-                int surfaceTop = getPlateauSurfaceTop(x, z, edgeDensity);
-                if (y <= surfaceTop) {
-                    return getPlateauSurfaceBlock(x, y, z, surfaceTop);
-                }
             }
             return BlockType.AIR;
         }
@@ -567,16 +615,14 @@ public class WorldGenerator {
             // This makes the crown widen smoothly into the slab without ever hanging unsupported.
             double crownMembership = lerp(pillarMember, plateauMember, crownT);
 
-            // Guarantee solid if the block directly above is plateau-solid (removes the seam gap).
-            if (y == localBaseY && isPlateauSolid(x, y + 1, z, radialDistance, edgeDensity, localThickness, dishBottom)) {
+            // Guarantee solid if the slab directly above this column exists.
+            if (isPlateauSolid(x, dishBottom, z, radialDistance, edgeDensity, localThickness, dishBottom)) {
                 return true;
             }
 
-            // Scale the threshold to plateauMember so rim columns (small plateauMember) pass.
-            // Old fixed 0.25 threshold always failed at rim (plateauMember≈0.04) → gap under slab.
-            // Any column with a slab above it must have a solid crown connecting to the pillar.
+            // Lower the threshold so rim columns (small plateauMember) pass.
             double softNoise = remap(noise2(x * 0.11 + 33.7, z * 0.11 + 91.3)) * 0.12;
-            double crownThreshold = plateauMember * 0.45 + softNoise;
+            double crownThreshold = Math.min(0.05, plateauMember * 0.2) + softNoise * 0.5;
             return crownMembership > crownThreshold;
         }
 
@@ -622,7 +668,29 @@ public class WorldGenerator {
         pillarStrength = clamp01(pillarStrength);
         if (pillarStrength < 0.05) return false;
 
-        double ratio = dist / Math.max(1.0, pillarRadius);
+                double effectiveRadius = pillarRadius;
+
+                // FBM detail pass — adds irregular bulges and pinches along the pillar silhouette
+                double fbmX = 0.0, fbmZ = 0.0;
+                double fbmFreq = PILLAR_FBM_FREQ;
+                double fbmAmp = 1.0;
+                double fbmNorm = 0.0;
+                for (int i = 0; i < (int) PILLAR_FBM_OCTAVES; i++) {
+                        fbmX += noise2(x * fbmFreq + PILLAR_FBM_SEED, y * fbmFreq * 0.6) * fbmAmp;
+                        fbmZ += noise2(z * fbmFreq + PILLAR_FBM_SEED * 1.3, y * fbmFreq * 0.6 + PILLAR_FBM_SEED) * fbmAmp;
+                        fbmNorm += fbmAmp;
+                        fbmFreq *= PILLAR_FBM_LACUN;
+                        fbmAmp *= PILLAR_FBM_PERSIST;
+                }
+                fbmX /= fbmNorm;
+                fbmZ /= fbmNorm;
+                double fbmDist = Math.sqrt((x + dwx + fbmX * effectiveRadius * PILLAR_FBM_STRENGTH)
+                                                                     * (x + dwx + fbmX * effectiveRadius * PILLAR_FBM_STRENGTH)
+                                                                 + (z + dwz + fbmZ * effectiveRadius * PILLAR_FBM_STRENGTH)
+                                                                     * (z + dwz + fbmZ * effectiveRadius * PILLAR_FBM_STRENGTH));
+                dist = fbmDist;
+
+                double ratio = dist / Math.max(1.0, effectiveRadius);
 
         // Stem progress (0 = seafloor, 1 = plateau base)
         double stemT = clamp01((double)(y - seafloorHeight) / Math.max(1.0, localBaseY - seafloorHeight));
@@ -823,19 +891,38 @@ public class WorldGenerator {
     }
 
     public int getSeafloorHeight(int x, int z) {
+        double warpX = noise2(x * SEAFLOOR_WARP_FREQ + SEAFLOOR_WARP_SEED,
+                              z * SEAFLOOR_WARP_FREQ) * SEAFLOOR_WARP_STRENGTH;
+        double warpZ = noise2(x * SEAFLOOR_WARP_FREQ,
+                              z * SEAFLOOR_WARP_FREQ + SEAFLOOR_WARP_SEED) * SEAFLOOR_WARP_STRENGTH;
+        double wx = x + warpX;
+        double wz = z + warpZ;
+
         // Multi-size seabed field: broad smooth relief with less obvious repetitive perlin structure.
-        double low = remap(multiScaleNoise2(x, z, SEAFLOOR_LAYER_SEED));
-        double mid = remap(multiScaleNoise2(x * 1.91, z * 1.91, SEAFLOOR_LAYER_SEED * 1.63));
-        double fine = remap(multiScaleNoise2(x * 3.47, z * 3.47, SEAFLOOR_LAYER_SEED * 2.29));
-        double patchField = remap(noise2(x * SEAFLOOR_PATCH_FREQ, z * SEAFLOOR_PATCH_FREQ));
+        double low = remap(multiScaleNoise2(wx, wz, SEAFLOOR_LAYER_SEED));
+        double mid = remap(multiScaleNoise2(wx * 1.91, wz * 1.91, SEAFLOOR_LAYER_SEED * 1.63));
+        double fine = remap(multiScaleNoise2(wx * 3.47, wz * 3.47, SEAFLOOR_LAYER_SEED * 2.29));
+        double patchField = remap(noise2(wx * SEAFLOOR_PATCH_FREQ, wz * SEAFLOOR_PATCH_FREQ));
         double patchMask = smoothstep(SEAFLOOR_PATCH_THRESHOLD, 1.0, patchField);
-        double patchRidge = remap(noise2(x * SEAFLOOR_PATCH_RIDGE_FREQ, z * SEAFLOOR_PATCH_RIDGE_FREQ));
+        double patchRidge = remap(noise2(wx * SEAFLOOR_PATCH_RIDGE_FREQ, wz * SEAFLOOR_PATCH_RIDGE_FREQ));
 
         double combined = low * SEAFLOOR_WEIGHT_LOW
             + mid * SEAFLOOR_WEIGHT_MID
             + fine * SEAFLOOR_WEIGHT_FINE;
         combined += patchMask * (patchRidge - 0.5) * SEAFLOOR_PATCH_STRENGTH;
         combined = Math.max(0.0, Math.min(1.0, combined));
+
+        // Ridged noise for underwater mountain ridges
+        double ridgeRaw = Math.abs(noise2(wx * SEAFLOOR_RIDGE_FREQ + SEAFLOOR_RIDGE_SEED,
+                                          wz * SEAFLOOR_RIDGE_FREQ));
+        double ridge = 1.0 - ridgeRaw;
+        ridge = ridge * ridge;
+        // Fine surface detail
+        double detail = remap(noise2(wx * SEAFLOOR_DETAIL_FREQ, wz * SEAFLOOR_DETAIL_FREQ));
+        combined = Math.max(0.0, Math.min(1.0,
+            combined + ridge * (SEAFLOOR_RIDGE_AMP / (double) SEAFLOOR_RELIEF)
+                     + (detail - 0.5) * (SEAFLOOR_DETAIL_AMP / (double) SEAFLOOR_RELIEF)));
+
         return SEAFLOOR_BASE_Y + (int) Math.round(combined * SEAFLOOR_RELIEF);
     }
 
@@ -1135,6 +1222,26 @@ public class WorldGenerator {
         double warpScale = Math.max(0.55, 1.0 + radialWarp);
         double effectiveRadius = getPillarRadius(x, z, y, seafloorHeight, pillarTopY) * warpScale;
 
+                // FBM detail pass — adds irregular bulges and pinches along the pillar silhouette
+                double fbmX = 0.0, fbmZ = 0.0;
+                double fbmFreq = PILLAR_FBM_FREQ;
+                double fbmAmp = 1.0;
+                double fbmNorm = 0.0;
+                for (int i = 0; i < (int) PILLAR_FBM_OCTAVES; i++) {
+                        fbmX += noise2(x * fbmFreq + PILLAR_FBM_SEED, y * fbmFreq * 0.6) * fbmAmp;
+                        fbmZ += noise2(z * fbmFreq + PILLAR_FBM_SEED * 1.3, y * fbmFreq * 0.6 + PILLAR_FBM_SEED) * fbmAmp;
+                        fbmNorm += fbmAmp;
+                        fbmFreq *= PILLAR_FBM_LACUN;
+                        fbmAmp *= PILLAR_FBM_PERSIST;
+                }
+                fbmX /= fbmNorm;
+                fbmZ /= fbmNorm;
+                double fbmDist = Math.sqrt((x + dwx + fbmX * effectiveRadius * PILLAR_FBM_STRENGTH)
+                                                                     * (x + dwx + fbmX * effectiveRadius * PILLAR_FBM_STRENGTH)
+                                                                 + (z + dwz + fbmZ * effectiveRadius * PILLAR_FBM_STRENGTH)
+                                                                     * (z + dwz + fbmZ * effectiveRadius * PILLAR_FBM_STRENGTH));
+                dist = fbmDist;
+
         double ratio = dist / Math.max(1.0, effectiveRadius);
         if (ratio <= PILLAR_EDGE_INNER_RATIO) {
             return true;
@@ -1331,8 +1438,23 @@ public class WorldGenerator {
 
         double finalDepth = baseDepth + scaledRoughness;
 
-        int rawBottom = localBaseY + (int) Math.round(finalDepth);
-        return Math.min(rawBottom, PLATEAU_SLAB_TOP - 4);
+        // Rim droop pulls the underside downward at the edge.
+        double edgeDensity = getPlateauEdgeDensity(x, z);
+        int droop = getPlateauRimDroop(x, z, edgeDensity);
+        int rawBottom = localBaseY + (int) Math.round(finalDepth) - droop;
+        return Math.min(Math.max(rawBottom, localBaseY), PLATEAU_SLAB_TOP - 4);
+    }
+
+    private int getPlateauRimDroop(int x, int z, double edgeDensity) {
+        double rimT = clamp01((edgeDensity - PLATEAU_EDGE_THRESHOLD) / PLATEAU_RIM_DROOP_BAND);
+        // rimT = 0 at the very edge, 1 well inside — droop is max at rim, zero inside
+        double droop = (1.0 - smoothstep(0.0, 1.0, rimT)) * PLATEAU_RIM_DROOP_MAX;
+        double noiseA = remap(noise2(x * PLATEAU_RIM_DROOP_NOISE_FREQ + PLATEAU_RIM_DROOP_NOISE_SEED,
+                                     z * PLATEAU_RIM_DROOP_NOISE_FREQ));
+        double noiseB = remap(noise2(x * PLATEAU_RIM_DROOP_NOISE_FREQ * 2.3,
+                                     z * PLATEAU_RIM_DROOP_NOISE_FREQ * 2.3 + PLATEAU_RIM_DROOP_NOISE_SEED));
+        double noiseScale = noiseA * 0.65 + noiseB * 0.35;
+        return (int) Math.round(droop * (0.6 + noiseScale * 0.8));
     }
 
     /**
@@ -1383,20 +1505,17 @@ public class WorldGenerator {
         if (y < slabBottomAtXZ) {
             return false;
         }
-        if (y > PLATEAU_SLAB_TOP) {
-            return false;
-        }
-
         if (edgeDensity <= PLATEAU_EDGE_THRESHOLD) {
             return false;
         }
 
-        int localTop = slabBottomAtXZ + localThickness - 1;
+        int localTop = getPlateauSurfaceTopY(x, z, edgeDensity, slabBottomAtXZ, localThickness);
         if (y > localTop) {
             return false;
         }
 
-        double slabFraction = (double) (y - slabBottomAtXZ) / (double) Math.max(1, localThickness);
+        int flatTop = slabBottomAtXZ + localThickness - 1;
+        double slabFraction = (double) (y - slabBottomAtXZ) / (double) Math.max(1, flatTop - slabBottomAtXZ + 1);
         double fadeFactor;
         if (slabFraction >= PLATEAU_VERTICAL_FADE_START) {
             double t = (slabFraction - PLATEAU_VERTICAL_FADE_START)
@@ -1427,18 +1546,11 @@ public class WorldGenerator {
             int slabBottomAtXZ) {
         boolean topExposed = !isPlateauSolid(x, y + 1, z, radialDistance, edgeDensity, localThickness, slabBottomAtXZ);
 
-        // Only allow green/surface materials near the very top of the plateau slab (for y > slab top - 2)
-        // to avoid a second “skyland” visible plateau at mid-slab (y ~= 140).
-        if (topExposed && y >= PLATEAU_SLAB_TOP - 2) {
-            if (y >= SNOWLINE && y >= PLATEAU_SLAB_TOP - 2) {
-                return BlockType.SNOW;
-            }
-            if (isInsideHotSpring(x, z)) {
-                return BlockType.MOSSY_STONE;
-            }
-            if (isInsideLakeBasin(x, z)) {
-                return BlockType.SAND;
-            }
+        // topExposed already means this is the surface, no extra Y guard needed.
+        if (topExposed) {
+            if (y >= SNOWLINE) return BlockType.SNOW;
+            if (isInsideHotSpring(x, z)) return BlockType.MOSSY_STONE;
+            if (isInsideLakeBasin(x, z)) return BlockType.SAND;
             return BlockType.GRASS;
         }
 
@@ -1469,8 +1581,8 @@ public class WorldGenerator {
             return BlockType.CLIFF_STONE;
         }
 
-        // Keep the top plateau supporters as dark stone rather than fancy blocks.
-        if (y < PLATEAU_SLAB_TOP - 4) {
+        int flatTop = slabBottomAtXZ + localThickness - 1;
+        if (y < flatTop - 2) {
             return BlockType.DARK_STONE;
         }
 
@@ -1484,46 +1596,62 @@ public class WorldGenerator {
         return BlockType.STONE;
     }
 
-    private int getPlateauSurfaceTop(int x, int z, double edgeDensity) {
-        int base = PLATEAU_SLAB_TOP;
+    private int getPlateauSurfaceTopY(int x, int z, double edgeDensity, int slabBottomAtXZ, int localThickness) {
+        int flatTop = slabBottomAtXZ + localThickness - 1;
 
-        double strength = (edgeDensity - PLATEAU_EDGE_THRESHOLD)
-                / (1.0 - PLATEAU_EDGE_THRESHOLD);
-        strength = clamp01(strength);
+        // Taper extra height to zero at rim so bumps don't overhang off the edge
+        double interiorT = clamp01((edgeDensity - PLATEAU_EDGE_THRESHOLD)
+                                   / (1.0 - PLATEAU_EDGE_THRESHOLD));
+        double rimT = smoothstep(0.12, 0.60, interiorT);
 
-        if (strength < 0.75) {
-            return base;
-        }
+        // Domain warp
+        double warpX = noise2(x * PLATEAU_SURFACE_WARP_FREQ + PLATEAU_SURFACE_WARP_SEED,
+                              z * PLATEAU_SURFACE_WARP_FREQ) * PLATEAU_SURFACE_WARP_STR;
+        double warpZ = noise2(x * PLATEAU_SURFACE_WARP_FREQ,
+                              z * PLATEAU_SURFACE_WARP_FREQ + PLATEAU_SURFACE_WARP_SEED) * PLATEAU_SURFACE_WARP_STR;
+        double wx = x + warpX;
+        double wz = z + warpZ;
 
-        double hillNoise = remap(noise2(
-                x * 0.018 + 4411.0,
-                z * 0.018 + 4411.0));
-        double extraHeight = hillNoise * 4.0 * (strength - 0.75) / 0.25;
+        // --- Base height noise (hills and valleys) ---
+        double coarse = remap(noise2(wx * PLATEAU_SURFACE_FREQ_COARSE + PLATEAU_SURFACE_WARP_SEED * 0.61,
+                                     wz * PLATEAU_SURFACE_FREQ_COARSE));
+        double mid = remap(noise2(wx * PLATEAU_SURFACE_FREQ_MID,
+                                  wz * PLATEAU_SURFACE_FREQ_MID + PLATEAU_SURFACE_WARP_SEED * 0.83));
+        double fine = remap(noise2(wx * PLATEAU_SURFACE_FREQ_FINE + PLATEAU_SURFACE_WARP_SEED * 1.27,
+                                   wz * PLATEAU_SURFACE_FREQ_FINE));
+        double heightCombined = coarse * PLATEAU_SURFACE_AMP_COARSE
+                              + mid * PLATEAU_SURFACE_AMP_MID
+                              + fine * PLATEAU_SURFACE_AMP_FINE;
+        heightCombined = clamp01(heightCombined);
 
-        return base + (int) Math.round(extraHeight);
-    }
+        // Flat bias: most of the plateau stays close to flatTop, only peaks push higher
+        heightCombined = Math.max(0.0, heightCombined - PLATEAU_SURFACE_FLAT_BIAS);
+        heightCombined /= Math.max(0.001, 1.0 - PLATEAU_SURFACE_FLAT_BIAS);
 
-    private BlockType getPlateauSurfaceBlock(int x, int y, int z, int surfaceTop) {
-        boolean topExposed = y == surfaceTop;
+        int extraHeight = (int) Math.round(heightCombined * PLATEAU_SURFACE_EXTRA_MAX * rimT);
 
-        if (topExposed) {
-            if (y >= SNOWLINE) {
-                return BlockType.SNOW;
-            }
-            if (isInsideHotSpring(x, z)) {
-                return BlockType.MOSSY_STONE;
-            }
-            if (isInsideLakeBasin(x, z)) {
-                return BlockType.SAND;
-            }
-            return BlockType.GRASS;
-        }
+        // --- Erosion (ridged noise inverted — carves channels downward) ---
+        // Two frequencies of ridged noise blended together for irregular gully shapes
+        double ridgeA = 1.0 - Math.abs(noise2(wx * PLATEAU_EROSION_FREQ_A + PLATEAU_EROSION_SEED,
+                                               wz * PLATEAU_EROSION_FREQ_A));
+        double ridgeB = 1.0 - Math.abs(noise2(wx * PLATEAU_EROSION_FREQ_B,
+                                               wz * PLATEAU_EROSION_FREQ_B + PLATEAU_EROSION_SEED));
+        // Sharpen the ridges so only the deepest channels matter
+        ridgeA = ridgeA * ridgeA;
+        ridgeB = ridgeB * ridgeB;
+        double erosion = (ridgeA * 0.6 + ridgeB * 0.4) * PLATEAU_EROSION_STRENGTH * rimT;
+        // Erosion subtracts from the total height budget — deep channels cut into flat areas too
+        int erosionDrop = (int) Math.round(erosion * (localThickness * 0.6));
 
-        if (y == surfaceTop - 1) {
-            return BlockType.DIRT;
-        }
+        // --- Fine detail (small bumps/pits on the surface) ---
+        double detailA = remap(noise2(x * PLATEAU_DETAIL_FREQ_A + PLATEAU_DETAIL_SEED,
+                                      z * PLATEAU_DETAIL_FREQ_A));
+        double detailB = remap(noise2(x * PLATEAU_DETAIL_FREQ_B,
+                                      z * PLATEAU_DETAIL_FREQ_B + PLATEAU_DETAIL_SEED));
+        double detail = (detailA * 0.6 + detailB * 0.4 - 0.5) * PLATEAU_DETAIL_AMP;
+        int detailBlocks = (int) Math.round(detail);
 
-        return BlockType.STONE;
+        return flatTop + extraHeight - erosionDrop + detailBlocks;
     }
 
     public double getPlateauEdgeDensity(int x, int z) {
